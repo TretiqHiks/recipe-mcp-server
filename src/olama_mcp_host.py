@@ -13,6 +13,13 @@ from mcp.client.stdio import stdio_client, StdioServerParameters
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 MODEL = "llama3.1"
 
+SYSTEM_PROMPT = (
+    "You are a recipe assistant. Use tools when helpful. "
+    "Prefer searching local recipes before inventing. "
+    "When the user asks to list, show, or check pantry items (or what's in the pantry), "
+    "you MUST call pantry_list_items and report exactly what it returns—never list common or example pantry items from memory."
+)
+
 
 def project_root() -> Path:
     # <root>/src/ollama_mcp_host.py -> <root>
@@ -80,6 +87,37 @@ def tool_result_content_to_json_string(content: Any) -> str:
     return json.dumps(str(content))
 
 
+async def run_chat_turn(
+    messages: List[Dict[str, Any]],
+    ollama_tools: List[Dict[str, Any]],
+    mcp_session: ClientSession,
+) -> str:
+    """Run one assistant turn (tool loop until no more tool_calls). Mutates messages. Returns final assistant text."""
+    for _ in range(20):
+        resp = ollama_chat(messages, ollama_tools)
+        msg = resp.get("message", {})
+        tool_calls = msg.get("tool_calls") or []
+        content = (msg.get("content") or "").strip()
+        if not tool_calls:
+            return content or "(no content)"
+        messages.append(msg)
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            tool_name = fn.get("name")
+            tool_args = normalize_tool_arguments(fn.get("arguments"))
+            if not tool_name:
+                continue
+            mcp_result = await mcp_session.call_tool(tool_name, tool_args)
+            messages.append(
+                {
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": tool_result_content_to_json_string(mcp_result.content),
+                }
+            )
+    return "(stopped after too many tool steps)"
+
+
 async def main() -> None:
     root = project_root()
 
@@ -101,17 +139,7 @@ async def main() -> None:
             mcp_tools = await mcp_session.list_tools()
             ollama_tools = mcp_tools_to_ollama_tools(mcp_tools)
 
-            messages: List[Dict[str, Any]] = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a recipe assistant. Use tools when helpful. "
-                        "Prefer searching local recipes before inventing. "
-                        "When the user asks to list, show, or check pantry items (or what's in the pantry), "
-                        "you MUST call pantry_list_items and report exactly what it returns—never list common or example pantry items from memory."
-                    ),
-                },
-            ]
+            messages: List[Dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
             while True:
                 user_text = input("You: ").strip()
@@ -119,37 +147,9 @@ async def main() -> None:
                     print("Goodbye.")
                     break
                 messages.append({"role": "user", "content": user_text})
-
-                for step in range(20):
-                    resp = ollama_chat(messages, ollama_tools)
-                    msg = resp.get("message", {})
-                    tool_calls = msg.get("tool_calls") or []
-                    content = (msg.get("content") or "").strip()
-                    if not tool_calls:
-                        if content:
-                            print(f"\nAssistant: {content}")
-                        else:
-                            print("\nAssistant: (no content)")
-                        messages.append(msg)
-                        break
-                    messages.append(msg)
-                    for tc in tool_calls:
-                        fn = tc.get("function", {})
-                        tool_name = fn.get("name")
-                        tool_args = normalize_tool_arguments(fn.get("arguments"))
-                        if not tool_name:
-                            continue
-                        mcp_result = await mcp_session.call_tool(tool_name, tool_args)
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "name": tool_name,
-                                "content": tool_result_content_to_json_string(mcp_result.content),
-                            }
-                        )
-                else:
-                    print("\nAssistant: (stopped after too many tool steps)")
-                    messages.append(msg)
+                content = await run_chat_turn(messages, ollama_tools, mcp_session)
+                messages.append({"role": "assistant", "content": content})
+                print(f"\nAssistant: {content}")
 
 if __name__ == "__main__":
     asyncio.run(main())

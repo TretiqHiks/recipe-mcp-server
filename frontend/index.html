@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recipe Chat</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      min-height: 100vh;
+      background: url('/static/recipe-background.jpg') center center / cover no-repeat fixed;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+    }
+    #chat {
+      width: 100%;
+      max-width: 42rem;
+      height: min(85vh, 32rem);
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.96);
+      border-radius: 1rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+    #transcript {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .msg-row { max-width: 85%; display: flex; flex-direction: column; gap: 0.35rem; }
+    .msg-row.user { align-self: flex-end; align-items: flex-end; }
+    .msg-row.assistant { align-self: flex-start; align-items: flex-start; }
+    .name-bubble { font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 1rem; font-weight: 500; }
+    .msg-row.user .name-bubble { background: #1a73e8; color: #fff; }
+    .msg-row.assistant .name-bubble { background: #e8eaed; color: #5f6368; }
+    .msg-row.error .name-bubble { background: #fce8e6; color: #c5221f; }
+    .content-bubble { padding: 0.6rem 0.9rem; border-radius: 0.5rem; white-space: pre-wrap; word-break: break-word; }
+    .msg-row.user .content-bubble { background: #1a73e8; color: #fff; }
+    .msg-row.assistant .content-bubble { background: #e8eaed; color: #202124; }
+    .msg-row.error .content-bubble { background: #fce8e6; color: #c5221f; }
+    #bottom {
+      border-top: 1px solid #dadce0;
+      padding: 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    #input {
+      flex: 1;
+      min-height: 44px;
+      max-height: 120px;
+      resize: vertical;
+      padding: 0.5rem 0.75rem;
+      font: inherit;
+      border: 1px solid #dadce0;
+      border-radius: 0.5rem;
+    }
+    #input:focus { outline: none; border-color: #1a73e8; }
+    #send { padding: 0.5rem 1rem; background: #1a73e8; color: #fff; border: none; border-radius: 0.5rem; cursor: pointer; font: inherit; }
+    #send:hover { background: #1557b0; }
+    #send:disabled { opacity: 0.6; cursor: not-allowed; }
+    .loading { opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <div id="chat">
+    <div id="transcript"></div>
+    <div id="bottom">
+    <textarea id="input" placeholder="Type a message…" rows="1"></textarea>
+    <button type="button" id="send">Send</button>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const API_BASE = window.CHAT_API_BASE || '';
+      const transcript = document.getElementById('transcript');
+      const input = document.getElementById('input');
+      const sendBtn = document.getElementById('send');
+
+      let messages = [];
+      let nextId = 1;
+
+      function addMessage(role, content, isError = false) {
+        const id = 'msg-' + nextId++;
+        const ts = new Date().toISOString();
+        messages.push({ id, role, content, timestamp: ts });
+        const row = document.createElement('div');
+        row.className = 'msg-row ' + role + (isError ? ' error' : '');
+        row.dataset.id = id;
+        const nameLabel = role === 'user' ? 'User' : 'Assistant';
+        const nameBubble = document.createElement('div');
+        nameBubble.className = 'name-bubble';
+        nameBubble.textContent = nameLabel;
+        const contentBubble = document.createElement('div');
+        contentBubble.className = 'content-bubble';
+        contentBubble.textContent = content;
+        row.appendChild(nameBubble);
+        row.appendChild(contentBubble);
+        transcript.appendChild(row);
+        transcript.scrollTop = transcript.scrollHeight;
+        return id;
+      }
+
+      function escapeHtml(s) {
+        const el = document.createElement('div');
+        el.textContent = s;
+        return el.innerHTML;
+      }
+
+      function setLoading(loading) {
+        sendBtn.disabled = loading;
+        if (loading) transcript.classList.add('loading'); else transcript.classList.remove('loading');
+      }
+
+      async function send() {
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        addMessage('user', text);
+        setLoading(true);
+        const payload = { messages: messages.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.content })) };
+        try {
+          const res = await fetch(API_BASE + '/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            addMessage('assistant', 'Request failed: ' + (data.detail || res.statusText), true);
+            return;
+          }
+          addMessage('assistant', data.content || '(no response)');
+        } catch (err) {
+          addMessage('assistant', 'Request failed: ' + (err.message || 'Network error'), true);
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      sendBtn.addEventListener('click', send);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          send();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

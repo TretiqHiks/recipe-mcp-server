@@ -1,0 +1,10 @@
+# HTTP API
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Existing host + MCP server
+requests>=2.31.0
+mcp>=1.0.0
+python-dotenv>=1.0.0
+sqlalchemy[asyncio]>=2.0.0
+aiosqlite>=0.20.0
