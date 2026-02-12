@@ -19,11 +19,11 @@ class Recipe(BaseModel):
     tags: List[str] = []
     source_url: Optional[HttpUrl] = None
     source_site: Optional[str] = None
-    fetched_at: Optional[str] = None  # ISO string for simplicity
+    fetched_at: Optional[str] = None 
 
 
 class PantryItem(BaseModel):
     name: str
     qty: Optional[float] = None
     unit: Optional[str] = None
-    expires: Optional[str] = None  # ISO date string
+    expires: Optional[str] = None 

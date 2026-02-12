@@ -31,12 +31,9 @@ def ollama_chat(messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> 
     return r.json()
 
 
+#convert MCP to OLLAMA
+
 def mcp_tools_to_ollama_tools(mcp_list_tools_response) -> List[Dict[str, Any]]:
-    """
-    Convert MCP tool definitions into Ollama's `tools` format.
-    MCP: tools.tools[*].name, .description, .inputSchema
-    Ollama expects: [{type:"function", function:{name, description, parameters}}]
-    """
     out: List[Dict[str, Any]] = []
     for t in mcp_list_tools_response.tools:
         out.append(
@@ -64,7 +61,6 @@ def normalize_tool_arguments(args: Any) -> Dict[str, Any]:
 
 
 def tool_result_content_to_json_string(content: Any) -> str:
-    """Convert MCP CallToolResult.content (list of ContentBlock e.g. TextContent) to a string for Ollama."""
     if content is None:
         return "{}"
     if isinstance(content, (str, int, float, bool)):
