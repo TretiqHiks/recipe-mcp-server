@@ -2,6 +2,7 @@
 Minimal HTTP API for the recipe chat (MCP + Ollama).
 Serves the chat UI and exposes POST /api/chat for one assistant turn.
 """
+import logging
 import os
 import sys
 from pathlib import Path
@@ -28,6 +29,17 @@ from mcp.client.stdio import stdio_client, StdioServerParameters
 
 app = FastAPI(title="Recipe Chat API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.on_event("startup")
+def _configure_logging() -> None:
+    """Ensure tool-call logs from olama_mcp_host are visible."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
+    )
 
 # --- Request/Response ---
 

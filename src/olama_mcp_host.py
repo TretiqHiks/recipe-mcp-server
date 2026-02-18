@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -8,6 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from mcp.client.session import ClientSession
 from mcp.client.stdio import stdio_client, StdioServerParameters
+
+logger = logging.getLogger(__name__)
 
 
 OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
@@ -80,6 +83,26 @@ def normalize_tool_arguments(args: Any) -> Dict[str, Any]:
     return dict(args)
 
 
+def _tool_result_preview(content: Any, max_len: int = 120) -> str:
+    """Short summary of tool result for logs (avoid huge payloads)."""
+    if content is None:
+        return "null"
+    if isinstance(content, list):
+        if not content:
+            return "[]"
+        first = content[0]
+        if hasattr(first, "text"):
+            text = getattr(first, "text", str(first))[:max_len]
+        else:
+            text = str(first)[:max_len]
+        return f"[{len(content)} item(s)] " + (text + "..." if len(text) >= max_len else text)
+    if isinstance(content, (str, int, float, bool)):
+        s = str(content)
+        return s[:max_len] + "..." if len(s) > max_len else s
+    s = json.dumps(content, default=str)[:max_len]
+    return s + "..." if len(s) >= max_len else s
+
+
 def tool_result_content_to_json_string(content: Any) -> str:
     if content is None:
         return "{}"
@@ -120,7 +143,10 @@ async def run_chat_turn(
             tool_args = normalize_tool_arguments(fn.get("arguments"))
             if not tool_name:
                 continue
+            logger.info("tool_call name=%s args=%s", tool_name, json.dumps(tool_args, default=str))
             mcp_result = await mcp_session.call_tool(tool_name, tool_args)
+            result_preview = _tool_result_preview(mcp_result.content)
+            logger.info("tool_result name=%s -> %s", tool_name, result_preview)
             messages.append(
                 {
                     "role": "tool",
@@ -132,6 +158,11 @@ async def run_chat_turn(
 
 
 async def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     root = project_root()
 
     env = os.environ.copy()

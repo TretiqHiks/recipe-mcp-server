@@ -69,6 +69,15 @@ Then type messages at the `You:` prompt. Empty line to exit.
 - **Served at:** `/` when the backend is running (same origin).
 - **API base URL:** By default the page uses relative URLs (`/api`). To point at another host, set `window.CHAT_API_BASE` before load (e.g. `https://api.example.com`) or use a build step that injects it.
 
+## Logging (tool-call transparency)
+
+When the LLM calls tools, each call is logged at **INFO** level:
+
+- **tool_call** – tool name and arguments (e.g. `pantry_upsert_items`, `recipes_search`).
+- **tool_result** – tool name and a short preview of the result (truncated if long).
+
+Logs go to stderr. When running the **CLI**, the host configures logging on startup. When running the **API** (uvicorn), the app configures logging on startup so the same lines appear in the server console. Use these logs to see which tools were used for each request without changing what the user sees in the chat.
+
 ## Data
 
 - Recipe and pantry data is stored in `data/recipes.db` (SQLite). The MCP server creates it on first run.
