@@ -10,18 +10,19 @@
       margin: 0;
       font-family: system-ui, sans-serif;
       min-height: 100vh;
+      height: 100vh;
       background: url('/static/recipe-background.jpg') center center / cover no-repeat fixed;
       display: flex;
       justify-content: center;
-      align-items: center;
-      padding: 1.5rem;
+      align-items: stretch;
+      padding: 0.75rem;
     }
     #chat {
       width: 100%;
       max-width: 42rem;
-      height: min(85vh, 32rem);
       display: flex;
       flex-direction: column;
+      min-height: 0;
       background: rgba(255, 255, 255, 0.96);
       border-radius: 1rem;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
@@ -64,6 +65,10 @@
       border-radius: 0.5rem;
     }
     #input:focus { outline: none; border-color: #1a73e8; }
+    #toolbar { display: flex; justify-content: flex-end; padding: 0.5rem 1rem; border-bottom: 1px solid #dadce0; flex-shrink: 0; }
+    #copyBtn { padding: 0.4rem 0.75rem; background: #5f6368; color: #fff; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 0.875rem; }
+    #copyBtn:hover { background: #3c4043; }
+    #copyBtn.copied { background: #1e8e3e; }
     #send { padding: 0.5rem 1rem; background: #1a73e8; color: #fff; border: none; border-radius: 0.5rem; cursor: pointer; font: inherit; }
     #send:hover { background: #1557b0; }
     #send:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -72,6 +77,7 @@
 </head>
 <body>
   <div id="chat">
+    <div id="toolbar"><button type="button" id="copyBtn">Copy</button></div>
     <div id="transcript"></div>
     <div id="bottom">
     <textarea id="input" placeholder="Type a message…" rows="1"></textarea>
@@ -85,6 +91,7 @@
       const transcript = document.getElementById('transcript');
       const input = document.getElementById('input');
       const sendBtn = document.getElementById('send');
+      const copyBtn = document.getElementById('copyBtn');
 
       let messages = [];
       let nextId = 1;
@@ -147,6 +154,25 @@
         }
       }
 
+      function copyConversation() {
+        if (messages.length === 0) {
+          copyBtn.textContent = 'Nothing to copy';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+          return;
+        }
+        const lines = messages.map(m => (m.role === 'user' ? 'User' : 'Assistant') + ': ' + m.content);
+        const text = lines.join('\n\n');
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtn.textContent = 'Copied!';
+          copyBtn.classList.add('copied');
+          setTimeout(() => { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }, 2000);
+        }).catch(() => {
+          copyBtn.textContent = 'Copy failed';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        });
+      }
+
+      copyBtn.addEventListener('click', copyConversation);
       sendBtn.addEventListener('click', send);
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
