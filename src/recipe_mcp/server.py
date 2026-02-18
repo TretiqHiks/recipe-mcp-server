@@ -42,6 +42,7 @@ async def pantry_list_items() -> List[PantryItem]:
     Notes:
       - If the pantry is empty, returns an empty list.
       - Item names are treated case-insensitively in storage.
+      - This tool can be chained with other pantry or recipe tools in multi-step requests.
     """
     return await store.list_pantry()
 
@@ -74,9 +75,69 @@ async def pantry_upsert_item(item: PantryItem) -> str:
 
     Notes:
       - Prefer consistent naming (e.g., "bell pepper" vs "pepper") to reduce duplicates.
+      - This tool can be chained with other pantry or recipe tools in multi-step requests.
     """
     await store.upsert_pantry_item(item)
     return "ok"
+
+
+@mcp.tool()
+async def pantry_upsert_items(items: List[PantryItem]) -> str:
+    """
+    Add or update multiple pantry items in one go (batch upsert).
+
+    Use this when the user adds several ingredients at once, e.g.:
+    - "Add 2 cans chickpeas, 1 onion, and 500g pasta"
+    - "I bought milk, eggs, and butter"
+    - "Put in olive oil, garlic, and 3 tomatoes"
+
+    This is a WRITE operation. Prefer this over calling pantry_upsert_item repeatedly.
+
+    Args:
+      items: List of PantryItem. Each may have:
+        - name (required): ingredient name
+        - qty (optional): number
+        - unit (optional): e.g. "cans", "g", "ml"
+        - expires (optional): ISO date string
+
+    Returns:
+      "ok" after all items are saved.
+
+    Notes:
+      - If the list has a single item, you may use either this or pantry_upsert_item.
+      - Empty list is a no-op; returns "ok".
+      - This tool can be chained with other pantry or recipe tools in multi-step requests.
+    """
+    for item in items:
+        await store.upsert_pantry_item(item)
+    return "ok"
+
+
+@mcp.tool()
+async def pantry_remove_item(item_name: str) -> str:
+    """
+    Remove a pantry item by name.
+
+    Use this when the user asks to remove, delete, or take out an item from the pantry, e.g.:
+    - "Remove bread"
+    - "Delete milk"
+    - "Take out 1 apple" (removes the item entirely, regardless of quantity)
+
+    This is a WRITE operation (it modifies stored pantry state).
+
+    Args:
+      item_name: The name of the ingredient to remove (case-insensitive).
+
+    Returns:
+      "removed" if the item was deleted, "not found" if it didn't exist.
+
+    Notes:
+      - This removes the entire item entry, not just a quantity.
+      - If you need to reduce quantity, use pantry_upsert_item with the new quantity instead.
+      - This tool can be chained with other pantry or recipe tools in multi-step requests.
+    """
+    deleted = await store.remove_pantry_item(item_name)
+    return "removed" if deleted else "not found"
 
 
 @mcp.tool()
@@ -164,6 +225,7 @@ async def recipes_search(query: str = "", tag: Optional[str] = None) -> List[str
         - broadening the query,
         - removing the tag filter,
         - (later) using web acquisition tools to ingest more recipes.
+      - This tool can be chained with other pantry or recipe tools in multi-step requests.
     """
     return await store.search_recipes(query=query, tag=tag)
 

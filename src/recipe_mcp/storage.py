@@ -90,3 +90,13 @@ class SqliteStore:
                 {"name": item.name.lower(), "json": item.model_dump_json()},
             )
             await s.commit()
+
+    async def remove_pantry_item(self, item_name: str) -> bool:
+        """Remove a pantry item by name. Returns True if deleted, False if not found."""
+        async with self.session_factory() as s:
+            res = await s.execute(
+                text("DELETE FROM pantry WHERE name = :name"),
+                {"name": item_name.lower()},
+            )
+            await s.commit()
+            return res.rowcount > 0
